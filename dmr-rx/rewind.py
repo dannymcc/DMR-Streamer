@@ -240,12 +240,18 @@ class DMRRx:
 
     def start_md380(self):
         log.info("starting md380-emu under qemu-arm-static")
+        # md380-emu under qemu-arm-static has a layout-sensitive bug: with ~21+
+        # env vars inherited from this container, something corrupts the magic
+        # header check and the emulator exits immediately with
+        # "Incorrect magic of (null).". Pass a minimal env — the decoder needs
+        # none of our config — to keep the auxv/stack layout safe.
         self.md380 = subprocess.Popen(
             ["qemu-arm-static", "/opt/md380-emu/md380-emu", "-d"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
+            env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
 
         # Forward md380-emu stderr to our log so we can see what it complains about.
