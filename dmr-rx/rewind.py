@@ -1063,7 +1063,7 @@ def main():
     password = os.environ["BM_PASSWORD"]
     master = os.environ["BM_MASTER"]
     port = int(os.environ.get("BM_PORT", "54006"))
-    tgs = [int(t) for t in os.environ.get("BM_TGS", "2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175").split(",") if t.strip()]
+    tgs = [int(t) for t in os.environ.get("BM_TGS", "91,2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175").split(",") if t.strip()]
     kerchunk_min_seconds = float(os.environ.get("KERCHUNK_MIN_SECONDS", "1.0"))
 
     icecast_user = "source"

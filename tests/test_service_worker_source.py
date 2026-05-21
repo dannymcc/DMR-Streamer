@@ -51,9 +51,22 @@ class ServiceWorkerSourceTest(unittest.TestCase):
 
         self.assertIn('3100: "USA Nationwide"', main_source)
         self.assertIn('"us": {"label": "US", "enabled": {3100}}', main_source)
-        self.assertIn("2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", config_source)
-        self.assertIn("2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", compose_source)
-        self.assertIn("2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", rx_source)
+        self.assertIn("91,2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", config_source)
+        self.assertIn("91,2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", compose_source)
+        self.assertIn("91,2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175", rx_source)
+
+    def test_worldwide_talkgroup_is_monitored_and_muted_by_default(self):
+        main_source = MAIN.read_text()
+        config_source = (ROOT / "app" / "config.py").read_text()
+        compose_source = (ROOT / "docker-compose.yml").read_text()
+        env_example_source = (ROOT / ".env.example").read_text()
+
+        self.assertIn('91: "Worldwide"', main_source)
+        self.assertIn('default_muted_tgs: str = "91"', config_source)
+        self.assertIn("def default_muted_tg_set(self) -> set[int]:", config_source)
+        self.assertIn("return settings.default_muted_tg_set()", main_source)
+        self.assertIn("DEFAULT_MUTED_TGS: ${DEFAULT_MUTED_TGS:-91}", compose_source)
+        self.assertIn("DEFAULT_MUTED_TGS=91", env_example_source)
 
     def test_response_relevant_nw_talkgroups_are_monitored(self):
         main_source = MAIN.read_text()
@@ -90,9 +103,10 @@ class ServiceWorkerSourceTest(unittest.TestCase):
     def test_main_talkgroup_cards_are_compact(self):
         active_call_source = (ROOT / "app" / "templates" / "_active_call.html").read_text()
 
-        self.assertIn("{% if compact %}min-h-[58px]{% else %}min-h-[64px]{% endif %}", active_call_source)
-        self.assertIn("{% if compact %}px-2.5 py-2{% else %}px-3 py-2{% endif %}", active_call_source)
-        self.assertIn("{% if compact %}text-[13px]{% else %}text-sm{% endif %}", active_call_source)
+        self.assertIn("{% if compact %}min-h-[52px]{% else %}min-h-[58px]{% endif %}", active_call_source)
+        self.assertIn("{% if compact %}px-2 py-1.5{% else %}px-2.5 py-2{% endif %}", active_call_source)
+        self.assertIn("{% if compact %}text-[12px]{% else %}text-[13px]{% endif %}", active_call_source)
+        self.assertIn('class="grid grid-cols-3 gap-1.5"', active_call_source)
 
     def test_bottom_live_banner_is_not_rendered(self):
         index_source = (ROOT / "app" / "templates" / "index.html").read_text()
@@ -122,7 +136,7 @@ class ServiceWorkerSourceTest(unittest.TestCase):
         base_source = (ROOT / "app" / "templates" / "base.html").read_text()
         icon_source = (ROOT / "app" / "static" / "icon.svg").read_text()
 
-        self.assertIn('APP_VERSION = "2026.05.21.6"', main_source)
+        self.assertIn('APP_VERSION = "2026.05.21.7"', main_source)
         self.assertIn('href="/manifest.webmanifest?v={{ app_version }}"', base_source)
         self.assertIn('f"/static/icon-192.png?v={APP_VERSION}"', main_source)
         self.assertIn('response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"', main_source)

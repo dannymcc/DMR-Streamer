@@ -9,7 +9,7 @@
     {% set tg_state = tg_activity.get(tg) %}
     {% set hidden_activity = tg_state and tg_state.active and not is_active %}
     <div class="flex items-stretch rounded-xl border transition-colors min-w-0 overflow-hidden
-                {% if compact %}min-h-[58px]{% else %}min-h-[64px]{% endif %}
+                {% if compact %}min-h-[52px]{% else %}min-h-[58px]{% endif %}
                 {% if is_muted %}bg-neutral-950 border-neutral-900 opacity-60
                 {% elif is_active %}bg-glove-accent/10 border-glove-accent
                 {% else %}bg-neutral-900 border-neutral-800{% endif %}">
@@ -18,11 +18,11 @@
                 hx-target="#active-call"
                 hx-swap="innerHTML"
                 aria-pressed="{{ 'true' if not is_muted else 'false' }}"
-                class="text-left flex-1 min-w-0 {% if compact %}px-2.5 py-2{% else %}px-3 py-2{% endif %}">
-            <div class="{% if compact %}text-[13px]{% else %}text-sm{% endif %} font-bold leading-tight whitespace-nowrap {% if is_muted %}text-neutral-500{% elif is_active %}text-glove-accent{% endif %}">
+                class="text-left flex-1 min-w-0 {% if compact %}px-2 py-1.5{% else %}px-2.5 py-2{% endif %}">
+            <div class="{% if compact %}text-[12px]{% else %}text-[13px]{% endif %} font-bold leading-tight truncate {% if is_muted %}text-neutral-500{% elif is_active %}text-glove-accent{% endif %}">
                 {% if is_priority %}★ {% endif %}{{ tg_name or "Talkgroup " ~ tg }}
             </div>
-            <div class="font-mono {% if compact %}text-[9px]{% else %}text-[10px]{% endif %} mt-1 {% if is_muted %}text-neutral-700{% elif is_active %}text-glove-accent/80{% else %}text-neutral-500{% endif %}">
+            <div class="font-mono text-[9px] mt-0.5 {% if is_muted %}text-neutral-700{% elif is_active %}text-glove-accent/80{% else %}text-neutral-500{% endif %}">
                 TG {{ tg }}
             </div>
             {% if is_muted %}
@@ -40,7 +40,7 @@
             </div>
             {% endif %}
         </button>
-        <div class="{% if compact %}w-8{% else %}w-10{% endif %} flex flex-col border-l {% if is_active %}border-glove-accent/30{% else %}border-neutral-800{% endif %}">
+        <div class="{% if compact %}w-7{% else %}w-8{% endif %} flex flex-col border-l {% if is_active %}border-glove-accent/30{% else %}border-neutral-800{% endif %}">
             {% if removable %}
             <button type="button"
                     hx-delete="/api/tg-extra/{{ tg }}"
@@ -158,15 +158,15 @@
             {% endfor %}
         </div>
     </div>
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-cols-3 gap-1.5">
     {% for tg, tg_name in monitored_tgs %}
-    {{ talkgroup_card(tg, tg_name) }}
+    {{ talkgroup_card(tg, tg_name, True) }}
     {% endfor %}
     </div>
     {% if uk_chat_tgs %}
-    <div class="mt-4">
-        <h3 class="mb-2 text-xs uppercase tracking-wider text-neutral-600">UK Chat</h3>
-        <div class="grid grid-cols-2 gap-2">
+    <div class="mt-3">
+        <h3 class="mb-1.5 text-[10px] uppercase tracking-wider text-neutral-600">UK Chat</h3>
+        <div class="grid grid-cols-3 gap-1.5">
         {% for tg, tg_name in uk_chat_tgs %}
         {{ talkgroup_card(tg, tg_name, True) }}
         {% endfor %}

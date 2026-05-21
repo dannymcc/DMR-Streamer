@@ -27,7 +27,7 @@ from radioid_cache import (
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-APP_VERSION = "2026.05.21.6"
+APP_VERSION = "2026.05.21.7"
 templates.env.globals["app_version"] = APP_VERSION
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
@@ -553,7 +553,9 @@ def read_muted_tgs() -> set[int]:
     try:
         with open(TG_MUTES_FILE) as f:
             data = json.load(f)
-    except (FileNotFoundError, ValueError, OSError):
+    except FileNotFoundError:
+        return settings.default_muted_tg_set()
+    except (ValueError, OSError):
         return set()
     values = data.get("muted_tgs") if isinstance(data, dict) else data
     if not isinstance(values, list):

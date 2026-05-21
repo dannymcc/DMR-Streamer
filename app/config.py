@@ -14,12 +14,16 @@ class Settings(BaseSettings):
     app_callsign: str = "DMR"
     app_description: str = "Live DMR audio stream and talkgroup activity."
 
-    talkgroups: str = "2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175"
+    talkgroups: str = "91,2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175"
+    default_muted_tgs: str = "91"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     def current_tgs(self) -> list[int]:
         return [int(t.strip()) for t in self.talkgroups.split(",") if t.strip()]
+
+    def default_muted_tg_set(self) -> set[int]:
+        return {int(t.strip()) for t in self.default_muted_tgs.split(",") if t.strip()}
 
 
 settings = Settings()
