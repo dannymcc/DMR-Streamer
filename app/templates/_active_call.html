@@ -1,0 +1,185 @@
+{# /api/active-call returns the live caller panel and TG selectors. #}
+
+{% set active_muted = active and active.active and active.tg in muted_tgs %}
+{% macro talkgroup_card(tg, tg_name, compact=False, removable=False) %}
+    {% set is_active = active and active.active and active.tg == tg %}
+    {% set is_muted = tg in muted_tgs %}
+    {% set is_temp_muted = tg in temp_muted_tgs %}
+    {% set is_priority = tg in priority_tgs %}
+    {% set tg_state = tg_activity.get(tg) %}
+    {% set hidden_activity = tg_state and tg_state.active and not is_active %}
+    <div class="flex items-stretch rounded-xl border transition-colors min-w-0 overflow-hidden
+                {% if compact %}min-h-[58px]{% else %}min-h-[64px]{% endif %}
+                {% if is_muted %}bg-neutral-950 border-neutral-900 opacity-60
+                {% elif is_active %}bg-glove-accent/10 border-glove-accent
+                {% else %}bg-neutral-900 border-neutral-800{% endif %}">
+        <button type="button"
+                {% if is_temp_muted %}hx-delete="/api/tg-temp-mutes/{{ tg }}"{% else %}hx-post="/api/tg-mutes/{{ tg }}"{% endif %}
+                hx-target="#active-call"
+                hx-swap="innerHTML"
+                aria-pressed="{{ 'true' if not is_muted else 'false' }}"
+                class="text-left flex-1 min-w-0 {% if compact %}px-2.5 py-2{% else %}px-3 py-2{% endif %}">
+            <div class="{% if compact %}text-[13px]{% else %}text-sm{% endif %} font-bold leading-tight whitespace-nowrap {% if is_muted %}text-neutral-500{% elif is_active %}text-glove-accent{% endif %}">
+                {% if is_priority %}★ {% endif %}{{ tg_name or "Talkgroup " ~ tg }}
+            </div>
+            <div class="font-mono {% if compact %}text-[9px]{% else %}text-[10px]{% endif %} mt-1 {% if is_muted %}text-neutral-700{% elif is_active %}text-glove-accent/80{% else %}text-neutral-500{% endif %}">
+                TG {{ tg }}
+            </div>
+            {% if is_muted %}
+            <div class="text-xs truncate {% if hidden_activity %}text-amber-300/80{% else %}text-neutral-600{% endif %}">
+                {% if is_temp_muted %}Muted until quiet{% else %}Muted{% endif %}{% if hidden_activity %} · active{% endif %}
+            </div>
+            {% elif is_active %}
+            <div class="text-xs truncate {% if active.name or active.callsign or active.src_id %}text-neutral-300{% else %}text-neutral-500{% endif %}">
+                {% if active.callsign %}{{ active.callsign }}{% elif active.src_id %}DMR {{ active.src_id }}{% else %}Unknown{% endif %}
+                {% if active.name %} · {{ active.name }}{% endif %}
+            </div>
+            {% elif hidden_activity %}
+            <div class="text-xs truncate text-amber-300/80">
+                Active{% if tg_state.callsign %} · {{ tg_state.callsign }}{% endif %}{% if tg_state.name %} · {{ tg_state.name }}{% endif %}
+            </div>
+            {% endif %}
+        </button>
+        <div class="{% if compact %}w-8{% else %}w-10{% endif %} flex flex-col border-l {% if is_active %}border-glove-accent/30{% else %}border-neutral-800{% endif %}">
+            {% if removable %}
+            <button type="button"
+                    hx-delete="/api/tg-extra/{{ tg }}"
+                    hx-target="#active-call"
+                    hx-swap="innerHTML"
+                    aria-label="Stop monitoring TG {{ tg }}"
+                    class="flex-1 text-base text-neutral-500">
+                ×
+            </button>
+            {% else %}
+            <button type="button"
+                    hx-post="/api/tg-priority/{{ tg }}"
+                    hx-target="#active-call"
+                    hx-swap="innerHTML"
+                    aria-label="Toggle priority for TG {{ tg }}"
+                    class="flex-1 {% if compact %}text-xs{% else %}text-sm{% endif %} {% if is_priority %}text-glove-accent{% else %}text-neutral-600{% endif %}">
+                ★
+            </button>
+            {% if hidden_activity %}
+            <div class="flex-1 flex items-center justify-center" aria-label="Activity on another talkgroup">
+                <span class="relative flex">
+                    <span class="inline-block w-2 h-2 rounded-full bg-amber-300/80"></span>
+                    <span class="absolute inset-0 w-2 h-2 rounded-full bg-amber-300/50 animate-ping"></span>
+                </span>
+            </div>
+            {% elif is_active and not is_muted %}
+            <div class="flex-1 flex items-center justify-center">
+                <span class="relative flex">
+                    <span class="inline-block w-2 h-2 rounded-full bg-glove-accent"></span>
+                    <span class="absolute inset-0 w-2 h-2 rounded-full bg-glove-accent animate-ping"></span>
+                </span>
+            </div>
+            {% else %}
+            <div class="flex-1"></div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %}
+
+<section data-media-active="{{ 'true' if active and active.active and not active_muted else 'false' }}"
+         data-media-tg="{{ active.tg if active and active.active else '' }}"
+         data-media-tg-name="{{ active_tg_name or '' }}"
+         data-media-src-id="{{ active.src_id if active and active.active and active.src_id else '' }}"
+         data-media-callsign="{{ active.callsign if active and active.active and active.callsign else '' }}"
+         data-media-name="{{ active.name if active and active.active and active.name else '' }}"
+         class="mb-3 rounded-xl border overflow-hidden
+                {% if active and active.active and not active_muted %}bg-glove-accent/10 border-glove-accent
+                {% else %}bg-neutral-900 border-neutral-800{% endif %}">
+    <div class="px-3 py-2 border-b {% if active and active.active and not active_muted %}border-glove-accent/40{% else %}border-neutral-800{% endif %}">
+        <div class="flex items-center justify-between gap-3">
+            <div class="text-[10px] uppercase tracking-wider font-semibold
+                        {% if active_muted %}text-neutral-400{% elif active and active.active %}text-glove-accent{% else %}text-neutral-500{% endif %}">
+                {% if active_muted %}Muted transmission{% elif active and active.active and active.lingering %}Buffered playback{% elif active and active.active %}Live transmission{% else %}No transmission{% endif %}
+            </div>
+            {% if active and active.active %}
+            <div class="font-mono text-[11px] px-2 py-0.5 rounded
+                        {% if active_muted %}bg-neutral-800 text-neutral-400{% else %}bg-glove-accent text-black font-bold{% endif %}">
+                TG {{ active.tg }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="px-3 py-2.5">
+        {% if active and active.active %}
+        <div class="min-w-0">
+            <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="text-xl font-bold leading-tight truncate">
+                        {% if active.callsign %}{{ active.callsign }}{% elif active.src_id %}DMR {{ active.src_id }}{% else %}Unknown{% endif %}
+                    </div>
+                    <div class="mt-0.5 text-xs text-neutral-400 truncate">
+                        {% if active.name %}{{ active.name }} · {% endif %}{{ active_tg_name or "TG " ~ active.tg }} · {{ active.src_id or "Unknown" }}
+                    </div>
+                </div>
+                <button type="button"
+                        hx-post="/api/tg-temp-mutes/{{ active.tg }}"
+                        hx-target="#active-call"
+                        hx-swap="innerHTML"
+                        class="h-9 w-9 shrink-0 rounded-lg text-white flex items-center justify-center
+                               {% if active_muted %}bg-neutral-800 border border-neutral-700
+                               {% else %}bg-glove-accent/40 border border-glove-accent{% endif %}"
+                        aria-label="Mute until quiet"
+                        title="Mute until quiet">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M11 5 6 9H3v6h3l5 4V5Z"></path>
+                        <path d="m19 9-6 6"></path>
+                        <path d="m13 9 6 6"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div class="py-2 text-center">
+            <div class="text-base font-semibold text-neutral-300">Waiting for activity</div>
+            <div class="text-xs text-neutral-500 mt-0.5">Enabled talkgroups will play through the stream.</div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<div class="mb-4">
+    <div class="flex items-center justify-between gap-3 mb-2">
+        <h2 class="text-sm uppercase tracking-wider text-neutral-500">Talkgroups</h2>
+        <div class="flex gap-1 overflow-x-auto">
+            {% for preset_key, preset_label in presets %}
+            <button type="button"
+                    hx-post="/api/tg-presets/{{ preset_key }}"
+                    hx-target="#active-call"
+                    hx-swap="innerHTML"
+                    class="rounded-md bg-neutral-900 border border-neutral-800 px-2 py-1 text-[11px] font-semibold text-neutral-300 whitespace-nowrap">
+                {{ preset_label }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2">
+    {% for tg, tg_name in monitored_tgs %}
+    {{ talkgroup_card(tg, tg_name) }}
+    {% endfor %}
+    </div>
+    {% if uk_chat_tgs %}
+    <div class="mt-4">
+        <h3 class="mb-2 text-xs uppercase tracking-wider text-neutral-600">UK Chat</h3>
+        <div class="grid grid-cols-2 gap-2">
+        {% for tg, tg_name in uk_chat_tgs %}
+        {{ talkgroup_card(tg, tg_name, True) }}
+        {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    <div class="mt-4">
+        {% if temp_monitor_tgs %}
+        <div class="grid grid-cols-2 gap-2">
+        {% for tg, tg_name in temp_monitor_tgs %}
+        {{ talkgroup_card(tg, tg_name, True, True) }}
+        {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>

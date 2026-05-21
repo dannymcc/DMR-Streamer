@@ -1,0 +1,16 @@
+<div class="space-y-2">
+    {% for fav in favourites %}
+    <div class="flex items-center justify-between bg-neutral-900 rounded-xl p-3 border border-neutral-800">
+        <div>
+            <div class="text-xs text-neutral-500">TG {{ fav.tg }}</div>
+            <div class="font-semibold">{{ fav.label }}</div>
+        </div>
+        <button hx-delete="/api/favourites/{{ fav.id }}" hx-target="#favourites-list" hx-swap="innerHTML"
+                hx-confirm="Remove {{ fav.label }}?"
+                class="tap-large flex items-center justify-center rounded-lg bg-neutral-800 text-neutral-400 px-4">✕</button>
+    </div>
+    {% endfor %}
+    {% if not favourites %}
+    <div class="text-neutral-500 text-sm text-center py-4">No favourites yet.</div>
+    {% endif %}
+</div>

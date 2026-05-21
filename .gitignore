@@ -1,0 +1,13 @@
+.env
+.private-markers
+data/
+*.db
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+
+# One-shot installer used to lay down the initial files; superseded by the
+# repository itself.
+install.sh

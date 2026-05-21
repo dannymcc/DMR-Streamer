@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en-GB" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DMR">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="manifest" href="/manifest.webmanifest?v={{ app_version }}">
+    <link rel="icon" type="image/png" sizes="180x180" href="/apple-touch-icon.png?v={{ app_version }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v={{ app_version }}">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png?v={{ app_version }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png?v={{ app_version }}">
+    <link rel="apple-touch-startup-image" href="/static/splash.svg?v={{ app_version }}">
+    <title>{% block title %}DMR Stream{% endblock %}</title>
+    <script src="/static/vendor/tailwindcss.js?v={{ app_version }}"></script>
+    <script src="/static/vendor/htmx.min.js?v={{ app_version }}"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: { extend: {
+          colors: { glove: { bg:'#0a0a0a', surface:'#171717', accent:'#22c55e', warn:'#f97316' } },
+          fontFamily: { sans: ['system-ui', '-apple-system', 'sans-serif'] }
+        }}
+      }
+    </script>
+    <style>
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --footer-height: 58px;
+      }
+      html, body {
+        background: #0a0a0a;
+        color: #e5e5e5;
+        margin: 0;
+        padding: 0;
+        height: 100dvh;
+        min-height: -webkit-fill-available;
+        width: 100vw;
+        max-width: 100vw;
+        overflow: hidden;  /* outer chrome doesn't scroll; the inner content area does */
+        overscroll-behavior: none;
+        -webkit-text-size-adjust: 100%;
+      }
+      button, a {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      button, input {
+        font: inherit;
+      }
+      body.temp-tg-open {
+        --footer-height: 112px;
+      }
+      body.temp-tg-has-chips {
+        --footer-height: 88px;
+      }
+      body.temp-tg-open.temp-tg-has-chips {
+        --footer-height: 142px;
+      }
+      .tap-large { min-height: 64px; min-width: 64px; }
+      .tap-large:active { background-color: rgba(34, 197, 94, 0.2); }
+
+      /* App shell: vertical flex, top safe-area padding, scrollable middle,
+         fixed-height footer (the player bar). Putting these in CSS rather than
+         a tangle of Tailwind classes makes the dynamic viewport math reliable
+         on iOS standalone-mode PWAs. */
+      .app-shell {
+        position: fixed;
+        inset: 0;
+        height: 100vh;
+        height: 100dvh;
+        width: 100vw;
+        max-width: 100vw;
+        padding-top: var(--safe-top);
+        padding-bottom: var(--footer-height);
+      }
+      .app-scroll {
+        height: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 1rem 1rem;
+        scrollbar-width: none;
+        overscroll-behavior-y: contain;
+      }
+      .app-scroll::-webkit-scrollbar { display: none; }
+      .app-footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        background: rgba(10, 10, 10, 0.95);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid rgba(38, 38, 38, 1);
+        /* Background reaches the very bottom edge of the screen; inner
+           tappable content carries the safe-area inset so it sits above
+           the home-indicator gesture zone. */
+      }
+      .app-footer-inner { padding-bottom: 0; }
+    </style>
+</head>
+<body class="font-sans antialiased">
+    {% block content %}{% endblock %}
+    {% block scripts %}{% endblock %}
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          reg.addEventListener('updatefound', () => {
+            const worker = reg.installing;
+            if (!worker) return;
+            worker.addEventListener('statechange', () => {
+              if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                const bar = document.createElement('button');
+                bar.type = 'button';
+                bar.textContent = 'Update available - tap to reload';
+                bar.className = 'fixed z-50 rounded-lg bg-glove-accent px-4 py-3 text-sm font-bold text-black shadow-xl';
+                bar.style.left = '12px';
+                bar.style.right = '12px';
+                bar.style.bottom = 'calc(env(safe-area-inset-bottom, 0px) + 12px)';
+                bar.onclick = () => location.reload();
+                document.body.appendChild(bar);
+              }
+            });
+          });
+        }).catch(()=>{});
+      }
+    </script>
+</body>
+</html>

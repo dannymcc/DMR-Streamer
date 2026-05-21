@@ -1,0 +1,17 @@
+{% if temp_monitor_tgs %}
+<div class="mb-2 flex gap-2 overflow-x-auto">
+    {% for tg, tg_name in temp_monitor_tgs %}
+    <div class="flex shrink-0 items-center overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
+        <span class="px-2.5 py-1 text-xs font-semibold text-neutral-200">{{ tg_name or "TG " ~ tg }}</span>
+        <button type="button"
+                hx-delete="/api/tg-extra/{{ tg }}"
+                hx-target="#active-call"
+                hx-swap="innerHTML"
+                class="border-l border-neutral-800 px-2 py-1 text-sm text-neutral-500"
+                aria-label="Stop monitoring TG {{ tg }}">
+            ×
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

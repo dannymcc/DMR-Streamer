@@ -1,0 +1,96 @@
+name: dmrstream
+
+# This stack expects an external reverse proxy on the docker_default network.
+# Configure your own public hostname and access controls outside this compose file.
+
+services:
+  icecast:
+    image: moul/icecast:latest
+    container_name: dmrstream-icecast
+    restart: unless-stopped
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_RELAY_PASSWORD}
+      ICECAST_ADMIN_USERNAME: admin
+      ICECAST_ADMIN_EMAIL: ${ICECAST_ADMIN_EMAIL:-admin@example.invalid}
+      ICECAST_LOCATION: ${ICECAST_LOCATION:-Unspecified}
+      ICECAST_HOSTNAME: ${ICECAST_HOSTNAME:-localhost}
+      ICECAST_MAX_CLIENTS: 20
+      ICECAST_MAX_SOURCES: 4
+    # Override buffer sizes in icecast.xml before the upstream entrypoint runs.
+    # Default is 64KB = ~10s buffer at 48kbps — that delay made the "Now
+    # transmitting" UI lag well behind the audio the phone was actually hearing.
+    # 4KB = ~0.7s, keeps UI in sync with sound; brief stutter risk on join is
+    # acceptable for our bursty DMR content.
+    command: >
+      sh -c "sed -i 's|<burst-size>65535</burst-size>|<burst-size>4096</burst-size>|g; s|<queue-size>524288</queue-size>|<queue-size>65536</queue-size>|g' /etc/icecast2/icecast.xml && exec /start.sh"
+    networks:
+      - docker_default
+
+  dmr-rx:
+    build:
+      context: ./dmr-rx
+      dockerfile: Dockerfile
+    container_name: dmrstream-dmr-rx
+    restart: unless-stopped
+    depends_on:
+      - icecast
+    environment:
+      BM_DMR_ID: ${BM_DMR_ID}
+      BM_PASSWORD: ${BM_PASSWORD}
+      BM_MASTER: ${BM_MASTER:-51.68.220.36}
+      BM_PORT: ${BM_PORT:-54006}
+      BM_TGS: ${BM_TGS:-2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175}
+      ICECAST_HOST: dmrstream-icecast
+      ICECAST_PORT: 8000
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD}
+      ICECAST_MOUNT: ${ICECAST_MOUNT:-/dmr.opus}
+      STREAM_NAME: "DMR Stream"
+      STREAM_DESCRIPTION: ${STREAM_DESCRIPTION:-BrandMeister DMR talkgroups}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      KERCHUNK_MIN_SECONDS: ${KERCHUNK_MIN_SECONDS:-1.0}
+      # Same volume as the FastAPI app — dmr-rx writes call records to
+      # listen_events table, app reads them for the "recent transmissions" UI.
+      DMRSTREAM_DB: /data/dmrstream.db
+    volumes:
+      - ./data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    networks:
+      - docker_default
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: dmrstream-app
+    restart: unless-stopped
+    depends_on:
+      - icecast
+    environment:
+      ICECAST_PUBLIC_URL: ${ICECAST_PUBLIC_URL:-http://localhost:8000}
+      ICECAST_MOUNT: ${ICECAST_MOUNT:-/dmr.opus}
+      ICECAST_INTERNAL: http://dmrstream-icecast:8000
+      BRANDMEISTER_API_KEY: ${BRANDMEISTER_API_KEY:-}
+      APP_CALLSIGN: ${APP_CALLSIGN:-DMR}
+      APP_DESCRIPTION: ${APP_DESCRIPTION:-Live DMR audio stream and talkgroup activity.}
+      TALKGROUPS: ${BM_TGS:-2350,2351,2352,2353,235,3100,23520,23526,23531,23562,235175}
+      DATABASE_URL: sqlite:////data/dmrstream.db
+      SECRET_KEY: ${SECRET_KEY}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - docker_default
+
+networks:
+  docker_default:
+    external: true

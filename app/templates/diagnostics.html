@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="app-shell">
+    <div class="app-scroll pb-8">
+        <header class="flex items-center gap-3 mb-5 pt-3">
+            <a href="/" class="tap-large flex items-center justify-center rounded-lg bg-neutral-800 px-4 text-neutral-300" aria-label="Back">←</a>
+            <h1 class="text-2xl font-bold">Diagnostics</h1>
+        </header>
+
+        <section class="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 class="mb-3 text-sm uppercase tracking-wider text-neutral-500">Versions</h2>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="text-neutral-500">App</div><div class="font-mono text-neutral-200">{{ app_version }}</div>
+                <div class="text-neutral-500">PWA cache</div><div class="font-mono text-neutral-200">{{ service_worker_version }}</div>
+            </div>
+        </section>
+
+        <section class="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 class="mb-3 text-sm uppercase tracking-wider text-neutral-500">Health</h2>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between gap-3"><span class="text-neutral-500">Stream</span><span class="{% if stream.online %}text-glove-accent{% else %}text-red-400{% endif %}">{{ "online" if stream.online else "offline" }}</span></div>
+                <div class="flex justify-between gap-3"><span class="text-neutral-500">Listeners</span><span class="font-mono">{{ stream.listeners or 0 }}</span></div>
+                <div class="flex justify-between gap-3"><span class="text-neutral-500">Receiver</span><span class="{% if receiver.online %}text-glove-accent{% else %}text-red-400{% endif %}">{{ "online" if receiver.online else "offline" }}</span></div>
+                <div class="flex justify-between gap-3"><span class="text-neutral-500">Receiver age</span><span class="font-mono">{{ receiver.age_s if receiver.age_s is defined else "n/a" }}s</span></div>
+            </div>
+        </section>
+
+        <section class="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 class="mb-3 text-sm uppercase tracking-wider text-neutral-500">Talkgroups</h2>
+            <div class="flex flex-wrap gap-2">
+                {% for row in monitored_tgs %}
+                <span class="rounded-lg bg-neutral-950 px-2.5 py-1.5 text-xs font-semibold text-neutral-300">TG {{ row.tg }}{% if row.name %} · {{ row.name }}{% endif %}</span>
+                {% endfor %}
+            </div>
+            {% if extra_tgs %}
+            <h3 class="mb-2 mt-4 text-xs uppercase tracking-wider text-neutral-600">Temporary</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for row in extra_tgs %}
+                <span class="rounded-lg bg-neutral-950 px-2.5 py-1.5 text-xs font-semibold text-neutral-300">TG {{ row.tg }} · {{ row.label }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="mb-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 class="mb-3 text-sm uppercase tracking-wider text-neutral-500">State</h2>
+            <div class="grid grid-cols-2 gap-2 text-sm">
+                <div class="text-neutral-500">Priority TGs</div><div class="font-mono text-neutral-200">{{ priority_tgs or [] }}</div>
+                <div class="text-neutral-500">Muted TGs</div><div class="font-mono text-neutral-200">{{ muted_tgs or [] }}</div>
+                <div class="text-neutral-500">RadioID rows</div><div class="font-mono text-neutral-200">{{ radioid_records }}</div>
+                <div class="text-neutral-500">RadioID refresh</div><div class="font-mono text-neutral-200">{{ radioid_refreshed_at or "n/a" }}</div>
+            </div>
+        </section>
+
+        <section class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+            <h2 class="mb-3 text-sm uppercase tracking-wider text-neutral-500">Sidecars</h2>
+            <div class="space-y-2 text-xs">
+                {% for name, meta in sidecars.items() %}
+                <div class="flex justify-between gap-3">
+                    <span class="text-neutral-500">{{ name }}</span>
+                    <span class="font-mono {% if meta.exists %}text-neutral-300{% else %}text-red-400{% endif %}">{% if meta.exists %}{{ meta.age_s }}s old{% else %}missing{% endif %}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}

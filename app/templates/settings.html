@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="app-shell">
+    <div class="app-scroll pb-8">
+        <header class="flex items-center gap-3 mb-6 pt-3">
+            <a href="/" class="tap-large flex items-center justify-center rounded-lg bg-neutral-800 px-4 text-neutral-300" aria-label="Back">←</a>
+            <h1 class="text-2xl font-bold">Settings</h1>
+        </header>
+
+        <section class="bg-neutral-900 rounded-2xl p-5 mb-6 border border-neutral-800">
+            <h2 class="text-sm uppercase tracking-wider text-neutral-500 mb-3">Currently monitored</h2>
+            <div class="flex flex-wrap gap-2">
+                {% for tg in current_tgs %}
+                <span class="bg-glove-accent text-black font-semibold rounded-lg px-3 py-2">TG {{ tg }}</span>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-neutral-500 mt-3">
+                Changing monitored TGs requires editing <code>.env</code> on the host and restarting the capture container.
+                The favourites below are UI bookmarks only.
+            </p>
+        </section>
+
+        <section class="mb-6">
+            <h2 class="text-sm uppercase tracking-wider text-neutral-500 mb-3">Favourite TGs</h2>
+            <div id="favourites-list">{% include "_favourites_list.html" %}</div>
+
+            <form hx-post="/api/favourites" hx-target="#favourites-list" hx-swap="innerHTML"
+                  class="mt-4 bg-neutral-900 rounded-xl p-4 border border-neutral-800">
+                <h3 class="text-sm font-semibold mb-3">Add favourite</h3>
+                <div class="space-y-3">
+                    <input type="number" name="tg" placeholder="TG number (e.g. 2350)"
+                           class="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-4 py-3 text-base" required>
+                    <input type="text" name="label" placeholder="Label (e.g. UK)"
+                           class="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-4 py-3 text-base"
+                           maxlength="64" required>
+                    <button type="submit" class="tap-large w-full rounded-lg bg-glove-accent text-black font-semibold">Add</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+{% endblock %}

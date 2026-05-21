@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block content %}
+<audio id="player" preload="none" crossorigin="anonymous" playsinline class="hidden">
+    <source src="{{ stream_url }}" type="audio/ogg; codecs=opus">
+    <source src="{{ stream_url }}" type="audio/ogg">
+</audio>
+
+<div class="app-shell">
+    <div class="app-scroll">
+        <div id="active-call" class="pt-3"
+             hx-get="/api/tg-selector"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+        </div>
+    </div>
+
+    <div class="app-footer">
+        <div class="app-footer-inner">
+            <div class="px-4 pt-2 pb-2">
+                <form id="temp-tg-form"
+                      hx-post="/api/tg-extra"
+                      hx-target="#active-call"
+                      hx-swap="innerHTML"
+                      class="mb-2 hidden items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-950 p-1.5">
+                    <input type="number"
+                           name="tg"
+                           inputmode="numeric"
+                           min="1"
+                           max="9999999"
+                           placeholder="Temporary TG"
+                           class="h-8 min-w-0 flex-1 rounded-lg border border-neutral-800 bg-black px-3 text-sm text-neutral-200"
+                           required>
+                    <button type="submit"
+                            class="h-8 rounded-lg bg-neutral-800 px-4 text-xs font-semibold text-neutral-200">
+                        Add
+                    </button>
+                </form>
+                <div id="temp-tg-chips"></div>
+                <div class="flex items-center gap-2">
+                    <button id="play-btn" type="button" onclick="togglePlay()" aria-pressed="false"
+                            class="h-[50px] flex-1 rounded-xl bg-glove-accent text-black font-bold text-base flex items-center justify-center px-4 transition-colors">
+                        Connect
+                    </button>
+                    <button id="temp-tg-toggle" type="button" onclick="toggleTempTgPanel()" aria-expanded="false" aria-controls="temp-tg-form"
+                            class="h-[50px] w-14 shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 text-sm font-bold text-neutral-200">
+                        TG
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const player = document.getElementById('player');
+const playBtn = document.getElementById('play-btn');
+const activeCallEl = document.getElementById('active-call');
+const tempTgForm = document.getElementById('temp-tg-form');
+const tempTgToggle = document.getElementById('temp-tg-toggle');
+const tempTgChips = document.getElementById('temp-tg-chips');
+const PLAYBACK_BANNER_DELAY_MS = 1000;
+const DEFAULT_MEDIA_ARTIST = 'TG {{ current_tgs | join(", TG ") }}';
+let activeCallDelayMs = PLAYBACK_BANNER_DELAY_MS;
+let isConnecting = false;
+let activeCallPollTimer = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let lastPlaybackProgressAt = 0;
+let wantsPlayback = false;
+let wakeLock = null;
+let wakeLockPending = false;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator) || document.hidden || !wantsPlayback || wakeLock || wakeLockPending) return;
+  wakeLockPending = true;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch {
+    wakeLock = null;
+  } finally {
+    wakeLockPending = false;
+  }
+}
+
+async function releaseWakeLock() {
+  const lock = wakeLock;
+  wakeLock = null;
+  if (!lock) return;
+  try {
+    await lock.release();
+  } catch {}
+}
+
+function fetchPlaybackCall() {
+  if (!window.htmx || player.paused) return;
+  fetch('/api/playback-call?delay_ms=' + encodeURIComponent(activeCallDelayMs), {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  })
+    .then((r) => r.ok ? r.text() : '')
+    .then((html) => {
+      replaceActiveCallHtml(html);
+    })
+    .catch(()=>{});
+}
+
+function replaceActiveCallHtml(html) {
+  if (!html) return;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  activeCallEl.innerHTML = doc.body.innerHTML;
+  if (window.htmx) htmx.process(activeCallEl);
+  updateMediaSession();
+}
+
+function refreshTempTgChips() {
+  if (!tempTgChips) return;
+  fetch('/api/temp-tg-chips', {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' },
+  })
+    .then((r) => r.ok ? r.text() : '')
+    .then((html) => {
+      tempTgChips.innerHTML = html;
+      document.body.classList.toggle('temp-tg-has-chips', html.trim().length > 0);
+      if (window.htmx) htmx.process(tempTgChips);
+    })
+    .catch(()=>{});
+}
+
+function startActiveCallPolling() {
+  stopActiveCallPolling();
+  fetchPlaybackCall();
+  activeCallPollTimer = setInterval(fetchPlaybackCall, 750);
+}
+
+function stopActiveCallPolling() {
+  if (activeCallPollTimer) clearInterval(activeCallPollTimer);
+  activeCallPollTimer = null;
+  activeCallEl.innerHTML = '';
+}
+
+function scheduleReconnect(reason) {
+  if (!wantsPlayback || isConnecting || reconnectTimer) return;
+  reconnectAttempts += 1;
+  const delay = Math.min(30000, 2000 * reconnectAttempts);
+  playBtn.textContent = reason + ' - reconnecting';
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!wantsPlayback) return;
+    player.load();
+    player.play().catch(()=>{});
+  }, delay);
+}
+
+function markPlaybackProgress() {
+  lastPlaybackProgressAt = Date.now();
+  reconnectAttempts = 0;
+}
+
+function estimateStreamLagSeconds() {
+  const ranges = player.seekable.length ? player.seekable : player.buffered;
+  if (!ranges.length || !Number.isFinite(player.currentTime)) return NaN;
+  return Math.max(0, ranges.end(ranges.length - 1) - player.currentTime);
+}
+
+function togglePlay() {
+  if (isConnecting) return;
+  if (player.paused) {
+    beginPlay();
+  } else {
+    disconnect();
+  }
+}
+
+function setTempTgPanel(open) {
+  if (!tempTgForm || !tempTgToggle) return;
+  tempTgForm.classList.toggle('hidden', !open);
+  tempTgForm.classList.toggle('flex', open);
+  tempTgToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.body.classList.toggle('temp-tg-open', open);
+  if (open) {
+    const input = tempTgForm.querySelector('input[name="tg"]');
+    if (input) setTimeout(() => input.focus(), 0);
+  }
+}
+
+function toggleTempTgPanel() {
+  setTempTgPanel(!document.body.classList.contains('temp-tg-open'));
+}
+
+function applyPresetFromShortcut(preset) {
+  fetch('/api/tg-presets/' + encodeURIComponent(preset), {
+    method: 'POST',
+    cache: 'no-store',
+    headers: { 'HX-Request': 'true', 'Cache-Control': 'no-cache' },
+  })
+    .then((r) => r.ok ? r.text() : '')
+    .then(replaceActiveCallHtml)
+    .catch(()=>{});
+}
+
+function handleLaunchAction() {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get('action');
+  if (!action) return;
+  if (action === 'temp-tg') {
+    setTempTgPanel(true);
+  } else if (action === 'connect') {
+    beginPlay();
+  } else if (action === 'preset-uk') {
+    applyPresetFromShortcut('uk');
+  } else if (action === 'preset-us') {
+    applyPresetFromShortcut('us');
+  }
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
+function beginPlay() {
+  if (isConnecting || !player.paused) return;
+  wantsPlayback = true;
+  requestWakeLock();
+  stopActiveCallPolling();
+  setBtnConnecting(true);
+  player.play().catch(err => {
+    wantsPlayback = false;
+    releaseWakeLock();
+    setBtnConnecting(false);
+    setBtnConnected(false);
+    playBtn.textContent = 'Connect failed';
+    stopActiveCallPolling();
+  });
+}
+
+function disconnect() {
+  wantsPlayback = false;
+  releaseWakeLock();
+  player.pause();
+}
+
+function setBtnConnecting(connecting) {
+  isConnecting = connecting;
+  playBtn.disabled = connecting;
+  if (connecting) {
+    playBtn.textContent = 'Connecting…';
+    playBtn.setAttribute('aria-busy', 'true');
+    playBtn.classList.add('animate-pulse', 'opacity-80', 'cursor-wait');
+  } else {
+    playBtn.removeAttribute('aria-busy');
+    playBtn.classList.remove('animate-pulse', 'opacity-80', 'cursor-wait');
+  }
+}
+
+function setBtnConnected(connected) {
+  setBtnConnecting(false);
+  if (connected) {
+    playBtn.textContent = 'Disconnect';
+    playBtn.setAttribute('aria-pressed', 'true');
+    playBtn.classList.remove('bg-glove-accent', 'text-black');
+    playBtn.classList.add('bg-red-600', 'text-white');
+  } else {
+    playBtn.textContent = 'Connect';
+    playBtn.setAttribute('aria-pressed', 'false');
+    playBtn.classList.remove('bg-red-600', 'text-white');
+    playBtn.classList.add('bg-glove-accent', 'text-black');
+  }
+  updateMediaSession();
+}
+
+player.addEventListener('playing', () => {
+  setBtnConnected(true);
+  markPlaybackProgress();
+  requestWakeLock();
+  startActiveCallPolling();
+});
+player.addEventListener('timeupdate', markPlaybackProgress);
+player.addEventListener('progress', markPlaybackProgress);
+player.addEventListener('pause', () => {
+  if (wantsPlayback) {
+    setBtnConnected(false);
+    stopActiveCallPolling();
+    scheduleReconnect('Stream interrupted');
+    return;
+  }
+  setBtnConnected(false);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  reconnectAttempts = 0;
+  stopActiveCallPolling();
+});
+player.addEventListener('waiting', () => { if (wantsPlayback) playBtn.textContent = 'Buffering…'; });
+player.addEventListener('stalled', () => scheduleReconnect('Stream stalled'));
+player.addEventListener('error', () => {
+  scheduleReconnect('Stream error');
+});
+
+setInterval(() => {
+  if (player.paused || isConnecting) return;
+  if (lastPlaybackProgressAt && Date.now() - lastPlaybackProgressAt > 25000) {
+    scheduleReconnect('Stream idle');
+  }
+}, 5000);
+
+let lastLatencyReload = 0;
+function trimLiveLatency() {
+  if (player.paused || player.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+  const ranges = player.seekable.length ? player.seekable : player.buffered;
+  if (!ranges.length) return;
+  const liveEdge = ranges.end(ranges.length - 1);
+  const lag = liveEdge - player.currentTime;
+  if (lag <= 1.25) return;
+  try {
+    player.currentTime = Math.max(ranges.start(ranges.length - 1), liveEdge - 0.15);
+  } catch {
+    const now = Date.now();
+    if (now - lastLatencyReload < 15000) return;
+    lastLatencyReload = now;
+    player.load();
+    player.play().catch(()=>{});
+  }
+}
+setInterval(trimLiveLatency, 2000);
+
+function currentMediaSessionPayload() {
+  const el = activeCallEl.querySelector('[data-media-active="true"]');
+  if (!el) return null;
+  return {
+    tg: el.dataset.mediaTg || '',
+    tgName: el.dataset.mediaTgName || '',
+    srcId: el.dataset.mediaSrcId || '',
+    callsign: el.dataset.mediaCallsign || '',
+    name: el.dataset.mediaName || '',
+  };
+}
+
+function updateMediaSession() {
+  if (!('mediaSession' in navigator)) return;
+  const payload = currentMediaSessionPayload();
+  const title = payload ? (payload.callsign || (payload.srcId ? 'DMR ' + payload.srcId : 'DMR Stream')) : 'DMR Stream';
+  const details = payload
+    ? [payload.name, payload.tgName || (payload.tg ? 'TG ' + payload.tg : ''), payload.srcId].filter(Boolean).join(' - ')
+    : DEFAULT_MEDIA_ARTIST;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: title,
+    artist: details,
+    album: 'BrandMeister',
+    artwork: [
+      { src: '/static/icon-192.png?v={{ app_version }}', sizes: '192x192', type: 'image/png' },
+      { src: '/static/icon-512.png?v={{ app_version }}', sizes: '512x512', type: 'image/png' },
+    ],
+  });
+}
+
+if ('mediaSession' in navigator) {
+  updateMediaSession();
+  navigator.mediaSession.setActionHandler('play', beginPlay);
+  navigator.mediaSession.setActionHandler('pause', disconnect);
+  navigator.mediaSession.setActionHandler('stop', disconnect);
+}
+
+// Relative-time labels on the recent-transmissions rows.
+function fmtRel(seconds) {
+  if (seconds < 5) return 'now';
+  if (seconds < 60) return Math.floor(seconds) + 's ago';
+  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+  return Math.floor(seconds / 3600) + 'h ago';
+}
+function updateRelativeTimes() {
+  const now = Date.now();
+  for (const el of document.querySelectorAll('[data-relative-time]')) {
+    const iso = el.getAttribute('data-relative-time');
+    if (!iso) continue;
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) continue;
+    el.textContent = fmtRel((now - t) / 1000);
+  }
+}
+setInterval(updateRelativeTimes, 1000);
+document.addEventListener('htmx:afterSwap', (event) => {
+  updateRelativeTimes();
+  updateMediaSession();
+  if (event.detail.target && event.detail.target.id === 'active-call') {
+    if (!player.paused) fetchPlaybackCall();
+  }
+});
+document.addEventListener('htmx:afterRequest', (event) => {
+  if (event.detail.elt && event.detail.elt.id === 'temp-tg-form' && event.detail.successful) {
+    event.detail.elt.reset();
+    setTempTgPanel(false);
+    refreshTempTgChips();
+  } else if (event.detail.elt && event.detail.elt.closest && event.detail.elt.closest('#temp-tg-chips') && event.detail.successful) {
+    refreshTempTgChips();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || player.paused) return;
+  requestWakeLock();
+  fetchPlaybackCall();
+  trimLiveLatency();
+});
+refreshTempTgChips();
+handleLaunchAction();
+</script>
+{% endblock %}
