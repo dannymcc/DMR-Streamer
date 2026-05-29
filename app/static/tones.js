@@ -73,8 +73,8 @@
   function playStartTone() {
     if (!tonesEnabled()) return;
     // Tight two-element alert: short rising lead, then a higher held note.
-    playVoice({ freq: 1080, glideTo: 1180, durationMs: 65, delay: 0,    wave: 'square', cutoff: 2800, gain: 0.16 });
-    playVoice({ freq: 1380,                 durationMs: 95, delay: 0.085, wave: 'square', cutoff: 2800, gain: 0.16 });
+    playVoice({ freq: 1080, glideTo: 1180, durationMs: 40, delay: 0,    wave: 'square', cutoff: 2800, gain: 0.16 });
+    playVoice({ freq: 1380,                 durationMs: 55, delay: 0.050, wave: 'square', cutoff: 2800, gain: 0.16 });
   }
 
   function playEndTone() {
