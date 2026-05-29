@@ -73,6 +73,7 @@ let wantsPlayback = false;
 let wakeLock = null;
 let wakeLockPending = false;
 let lastCallKey = '';
+let pendingEndToneTimer = null;
 
 function currentCallKey() {
   const el = activeCallEl.querySelector('[data-media-active="true"]');
@@ -80,19 +81,43 @@ function currentCallKey() {
   return (el.dataset.mediaTg || '') + '|' + (el.dataset.mediaSrcId || '');
 }
 
+function clearPendingEndTone() {
+  if (pendingEndToneTimer) {
+    clearTimeout(pendingEndToneTimer);
+    pendingEndToneTimer = null;
+  }
+}
+
+function scheduleEndTone() {
+  clearPendingEndTone();
+  // Banner is already delayed by PLAYBACK_BANNER_DELAY_MS server-side, but
+  // the client's audio buffer can run longer. Wait for the remaining buffered
+  // audio so the end tone lands when the call audio actually finishes.
+  const lagSec = estimateStreamLagSeconds();
+  const lagMs = Number.isFinite(lagSec) ? lagSec * 1000 : 1800;
+  const delayMs = Math.max(0, Math.min(3000, lagMs - PLAYBACK_BANNER_DELAY_MS));
+  pendingEndToneTimer = setTimeout(() => {
+    pendingEndToneTimer = null;
+    window.dmrTones.playEndTone();
+  }, delayMs);
+}
+
 function handleCallTransition() {
   if (!wantsPlayback) {
     lastCallKey = currentCallKey();
+    clearPendingEndTone();
     return;
   }
   const key = currentCallKey();
   if (key === lastCallKey) return;
   if (key && !lastCallKey) {
+    clearPendingEndTone();
     window.dmrTones.playStartTone();
   } else if (!key && lastCallKey) {
-    window.dmrTones.playEndTone();
+    scheduleEndTone();
   } else if (key && lastCallKey) {
     // Source changed mid-monitor — mark the new TX.
+    clearPendingEndTone();
     window.dmrTones.playStartTone();
   }
   lastCallKey = key;
@@ -167,6 +192,7 @@ function stopActiveCallPolling() {
   if (activeCallPollTimer) clearInterval(activeCallPollTimer);
   activeCallPollTimer = null;
   // Stream stopped — drop call tracking without firing a tone.
+  clearPendingEndTone();
   lastCallKey = '';
   activeCallEl.textContent = '';
 }
