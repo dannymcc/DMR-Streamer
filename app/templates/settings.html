@@ -61,63 +61,17 @@
 
 {% block scripts %}
 <script>
-const TONES_STORAGE_KEY = 'dmrstream.tones';
 const tonesToggle = document.getElementById('tones-toggle');
 const tonesPreview = document.getElementById('tones-preview');
-let toneCtx = null;
 
-function tonesEnabled() {
-  try {
-    return localStorage.getItem(TONES_STORAGE_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-function setTonesEnabled(on) {
-  try {
-    localStorage.setItem(TONES_STORAGE_KEY, on ? 'on' : 'off');
-  } catch {}
-}
-
-function ensureToneCtx() {
-  if (toneCtx) return toneCtx;
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  try {
-    toneCtx = new Ctx();
-  } catch {
-    toneCtx = null;
-  }
-  return toneCtx;
-}
-
-function playBeep(freq, durationMs, startOffsetSec, peakGain) {
-  const ctx = ensureToneCtx();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(()=>{});
-  const start = ctx.currentTime + (startOffsetSec || 0);
-  const dur = durationMs / 1000;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.008);
-  gain.gain.setValueAtTime(peakGain, start + dur - 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + dur + 0.02);
-}
-
-tonesToggle.checked = tonesEnabled();
-tonesToggle.addEventListener('change', () => setTonesEnabled(tonesToggle.checked));
+tonesToggle.checked = window.dmrTones.tonesEnabled();
+tonesToggle.addEventListener('change', () => window.dmrTones.setTonesEnabled(tonesToggle.checked));
 
 tonesPreview.addEventListener('click', () => {
-  playBeep(1050, 80, 0, 0.18);
-  playBeep(1300, 90, 0.11, 0.18);
-  playBeep(600, 140, 0.85, 0.14);
+  window.dmrTones.resumeCtx();
+  // Preview the start tone, then the end tone after a short pause.
+  window.dmrTones.playStartTone();
+  setTimeout(() => window.dmrTones.playEndTone(), 850);
 });
 </script>
 {% endblock %}

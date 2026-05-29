@@ -63,7 +63,6 @@ const tempTgToggle = document.getElementById('temp-tg-toggle');
 const tempTgChips = document.getElementById('temp-tg-chips');
 const PLAYBACK_BANNER_DELAY_MS = 1000;
 const DEFAULT_MEDIA_ARTIST = 'TG {{ current_tgs | join(", TG ") }}';
-const TONES_STORAGE_KEY = 'dmrstream.tones';
 let activeCallDelayMs = PLAYBACK_BANNER_DELAY_MS;
 let isConnecting = false;
 let activeCallPollTimer = null;
@@ -73,59 +72,7 @@ let lastPlaybackProgressAt = 0;
 let wantsPlayback = false;
 let wakeLock = null;
 let wakeLockPending = false;
-let toneCtx = null;
 let lastCallKey = '';
-
-function tonesEnabled() {
-  try {
-    return localStorage.getItem(TONES_STORAGE_KEY) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-function ensureToneCtx() {
-  if (toneCtx) return toneCtx;
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  try {
-    toneCtx = new Ctx();
-  } catch {
-    toneCtx = null;
-  }
-  return toneCtx;
-}
-
-function playBeep(freq, durationMs, startOffsetSec, peakGain) {
-  const ctx = ensureToneCtx();
-  if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume().catch(()=>{});
-  const start = ctx.currentTime + (startOffsetSec || 0);
-  const dur = durationMs / 1000;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.value = freq;
-  // Short attack/release envelope so the beep doesn't click.
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.008);
-  gain.gain.setValueAtTime(peakGain, start + dur - 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(start);
-  osc.stop(start + dur + 0.02);
-}
-
-function playStartTone() {
-  if (!tonesEnabled()) return;
-  playBeep(1050, 80, 0, 0.18);
-  playBeep(1300, 90, 0.11, 0.18);
-}
-
-function playEndTone() {
-  if (!tonesEnabled()) return;
-  playBeep(600, 140, 0, 0.14);
-}
 
 function currentCallKey() {
   const el = activeCallEl.querySelector('[data-media-active="true"]');
@@ -141,12 +88,12 @@ function handleCallTransition() {
   const key = currentCallKey();
   if (key === lastCallKey) return;
   if (key && !lastCallKey) {
-    playStartTone();
+    window.dmrTones.playStartTone();
   } else if (!key && lastCallKey) {
-    playEndTone();
+    window.dmrTones.playEndTone();
   } else if (key && lastCallKey) {
     // Source changed mid-monitor — mark the new TX.
-    playStartTone();
+    window.dmrTones.playStartTone();
   }
   lastCallKey = key;
 }
@@ -304,8 +251,7 @@ function beginPlay() {
   if (isConnecting || !player.paused) return;
   wantsPlayback = true;
   // User gesture — safe to unlock the audio context for tones.
-  ensureToneCtx();
-  if (toneCtx && toneCtx.state === 'suspended') toneCtx.resume().catch(()=>{});
+  window.dmrTones.resumeCtx();
   requestWakeLock();
   stopActiveCallPolling();
   setBtnConnecting(true);

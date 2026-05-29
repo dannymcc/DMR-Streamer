@@ -977,7 +977,8 @@ const APP_SHELL = [
   "/static/apple-touch-icon.png",
   "/static/splash.svg",
   "/static/vendor/htmx.min.js",
-  "/static/vendor/tailwindcss.js"
+  "/static/vendor/tailwindcss.js",
+  "/static/tones.js"
 ];
 self.addEventListener('install', e => {{
   e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)).finally(() => self.skipWaiting()));
